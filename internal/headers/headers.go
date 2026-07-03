@@ -3,6 +3,7 @@ package headers
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 )
@@ -12,6 +13,14 @@ const crlf = "\r\n"
 var headerNameRE = regexp.MustCompile(`^[!#$%&'*+\-.^_` + "`" + `|~0-9A-Za-z]+$`)
 
 type Headers map[string]string
+
+func (h Headers) String() string {
+	headers := ""
+	for hk, hv := range h {
+		headers += fmt.Sprintf("- %s: %s\n", hk, hv)
+	}
+	return headers
+}
 
 func NewHeaders() Headers {
 	return make(Headers)
