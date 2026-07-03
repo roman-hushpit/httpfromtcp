@@ -21,6 +21,10 @@ type Request struct {
 	Status      Status
 }
 
+func (req Request) String() string {
+	return fmt.Sprintf("Request line:\n- Method: %s\n- Target: %s\n- Version: %s", req.RequestLine.Method, req.RequestLine.RequestTarget, req.RequestLine.HttpVersion)
+}
+
 type RequestLine struct {
 	HttpVersion   string
 	RequestTarget string
