@@ -115,3 +115,30 @@ func (w *Writer) WriteBody(p []byte) (int, error) {
 	}
 	return 0, errors.New("wrong order of writing")
 }
+
+func (w *Writer) WriteChunkedBody(p []byte) (int, error) {
+	if w.WriterStatus == headersLineWritten {
+		total := 0
+		n, _ := w.writer.Write([]byte(fmt.Sprintf("%x\r\n", len(p))))
+		total += n
+		n, _ = w.writer.Write(p)
+		total += n
+		n, _ = w.writer.Write([]byte("\r\n"))
+		total += n
+		return total, nil
+	}
+	return 0, errors.New("wrong order of writing")
+}
+
+func (w *Writer) WriteChunkedBodyDone() (int, error) {
+	if w.WriterStatus == headersLineWritten {
+		total := 0
+		n, _ := w.writer.Write([]byte(fmt.Sprintf("%x\r\n", 0)))
+		total += n
+		n, _ = w.writer.Write([]byte("\r\n"))
+		total += n
+		w.WriterStatus = bodyWritten
+		return total, nil
+	}
+	return 0, errors.New("wrong order of writing")
+}

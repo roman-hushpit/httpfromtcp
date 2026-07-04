@@ -34,6 +34,10 @@ func (h Headers) Set(key string, value string) {
 	h[key] = strings.TrimSpace(value)
 }
 
+func (h Headers) Drop(key string) {
+	delete(h, key)
+}
+
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	crlfPosition := bytes.Index(data, []byte(crlf))
 	if crlfPosition == -1 {
