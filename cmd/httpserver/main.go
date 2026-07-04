@@ -21,6 +21,19 @@ const port = 42069
 
 func main() {
 	server, err := server.Serve(port, func(w *response.Writer, req *request.Request) {
+		if req.RequestLine.RequestTarget == "/video" {
+			file, err := os.ReadFile("assets/vim.mp4")
+			if err != nil {
+				return
+			}
+			w.WriteStatusLine(200)
+			headers := response.GetDefaultHeaders(len(file))
+			headers.Set("Content-Type", "video/mp4")
+			w.WriteHeaders(headers)
+			w.WriteBody(file)
+			return
+		}
+
 		if req.RequestLine.RequestTarget == "/yourproblem" {
 			badRequest := "<html>\n  <head>\n    <title>400 Bad Request</title>\n  </head>\n  <body>\n    <h1>Bad Request</h1>\n    <p>Your request honestly kinda sucked.</p>\n  </body>\n</html>\n"
 			w.WriteStatusLine(400)
