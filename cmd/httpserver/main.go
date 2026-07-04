@@ -1,7 +1,6 @@
 package main
 
 import (
-	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -15,21 +14,31 @@ import (
 const port = 42069
 
 func main() {
-	server, err := server.Serve(port, func(w io.Writer, req *request.Request) *server.HandlerError {
+	server, err := server.Serve(port, func(w *response.Writer, req *request.Request) {
 		if req.RequestLine.RequestTarget == "/yourproblem" {
-			return &server.HandlerError{
-				Message:    "Your problem is not my problem\n",
-				StatusCode: response.BAD_REQUEST,
-			}
+			badRequest := "<html>\n  <head>\n    <title>400 Bad Request</title>\n  </head>\n  <body>\n    <h1>Bad Request</h1>\n    <p>Your request honestly kinda sucked.</p>\n  </body>\n</html>\n"
+			w.WriteStatusLine(400)
+			headers := response.GetDefaultHeaders(len(badRequest))
+			headers.Set("Content-Type", "text/html")
+			w.WriteHeaders(headers)
+			w.WriteBody([]byte(badRequest))
+			return
 		}
 		if req.RequestLine.RequestTarget == "/myproblem" {
-			return &server.HandlerError{
-				Message:    "Woopsie, my bad\n",
-				StatusCode: response.INTERNAL_SERVER_ERROR,
-			}
+			internalServerError := "<html>\n  <head>\n    <title>500 Internal Server Error</title>\n  </head>\n  <body>\n    <h1>Internal Server Error</h1>\n    <p>Okay, you know what? This one is on me.</p>\n  </body>\n</html>\n"
+			w.WriteStatusLine(500)
+			headers := response.GetDefaultHeaders(len(internalServerError))
+			headers.Set("Content-Type", "text/html")
+			w.WriteHeaders(headers)
+			w.WriteBody([]byte(internalServerError))
+			return
 		}
-		w.Write([]byte("All good, frfr\n"))
-		return nil
+		successResponse := "<html>\n  <head>\n    <title>200 OK</title>\n  </head>\n  <body>\n    <h1>Success!</h1>\n    <p>Your request was an absolute banger.</p>\n  </body>\n</html>\n"
+		w.WriteStatusLine(200)
+		headers := response.GetDefaultHeaders(len(successResponse))
+		headers.Set("Content-Type", "text/html")
+		w.WriteHeaders(headers)
+		w.WriteBody([]byte(successResponse))
 	})
 	if err != nil {
 		log.Fatalf("Error starting server: %v", err)

@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -63,7 +62,7 @@ func (s *Server) listen() {
 
 func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
-	fromReader, err := request.RequestFromReader(conn)
+	parsedRequest, err := request.RequestFromReader(conn)
 	if err != nil {
 		hErr := &HandlerError{
 			StatusCode: response.BAD_REQUEST,
@@ -72,25 +71,8 @@ func (s *Server) handle(conn net.Conn) {
 		hErr.WriteError(conn)
 		return
 	}
-	var b bytes.Buffer
-	handlerEror := s.Handler(&b, fromReader)
-	if handlerEror != nil {
-		handlerEror.WriteError(conn)
-		return
-	}
-
-	err = response.WriteStatusLine(conn, 200)
-	if err != nil {
-		return
-	}
-	err = response.WriteHeaders(conn, response.GetDefaultHeaders(len(b.Bytes())))
-	if err != nil {
-		return
-	}
-	_, err = conn.Write(b.Bytes())
-	if err != nil {
-		return
-	}
+	newWriter := response.NewWriter(conn)
+	s.Handler(newWriter, parsedRequest)
 }
 
 type HandlerError struct {
@@ -113,4 +95,4 @@ func (he *HandlerError) WriteError(out io.Writer) {
 	}
 }
 
-type Handler func(w io.Writer, req *request.Request) *HandlerError
+type Handler func(w *response.Writer, req *request.Request)

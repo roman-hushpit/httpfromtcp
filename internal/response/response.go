@@ -1,6 +1,7 @@
 package response
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -61,4 +62,56 @@ func WriteHeaders(w io.Writer, headers headers.Headers) error {
 		return err
 	}
 	return nil
+}
+
+type WriterStatus int
+
+const (
+	nothingWritten WriterStatus = iota
+	statusLineWritten
+	headersLineWritten
+	bodyWritten
+)
+
+func NewWriter(w io.Writer) *Writer {
+	return &Writer{
+		writer: w,
+	}
+}
+
+type Writer struct {
+	writer       io.Writer
+	WriterStatus WriterStatus
+}
+
+func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
+	if w.WriterStatus == nothingWritten {
+		err := WriteStatusLine(w.writer, statusCode)
+		if err != nil {
+			return err
+		}
+		w.WriterStatus = statusLineWritten
+		return nil
+	}
+	return errors.New("wrong order of writing")
+}
+func (w *Writer) WriteHeaders(headers headers.Headers) error {
+	if w.WriterStatus == statusLineWritten {
+		err := WriteHeaders(w.writer, headers)
+		if err != nil {
+			return err
+		}
+		w.WriterStatus = headersLineWritten
+		return nil
+	}
+	return errors.New("wrong order of writing")
+
+}
+func (w *Writer) WriteBody(p []byte) (int, error) {
+	if w.WriterStatus == headersLineWritten {
+		n, err := w.writer.Write(p)
+		w.WriterStatus = bodyWritten
+		return n, err
+	}
+	return 0, errors.New("wrong order of writing")
 }
