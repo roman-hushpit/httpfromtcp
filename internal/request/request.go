@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/roman-hushpit/learn-http-protocol/internal/headers"
@@ -16,17 +17,19 @@ type State int
 const (
 	requestStateInitialized State = iota
 	requestStateParsingHeaders
+	requestStateParsingBody
 	requestStateDone
 )
 
 type Request struct {
 	RequestLine RequestLine
 	Headers     headers.Headers
+	Body        []byte
 	State       State
 }
 
 func (req Request) String() string {
-	return fmt.Sprintf("Request line:\n%s\nHeaders:\n%s", req.RequestLine, req.Headers)
+	return fmt.Sprintf("Request line:\n%s\nHeaders:\n%sBody:\n%s\n", req.RequestLine, req.Headers, req.Body)
 }
 
 type RequestLine struct {
@@ -36,7 +39,8 @@ type RequestLine struct {
 }
 
 func (rl RequestLine) String() string {
-	return fmt.Sprintf("- Method: %s\n- Target: %s\n- Version: %s", rl.Method, rl.RequestTarget, rl.HttpVersion)
+	return fmt.Sprintf("- Method: %s\n- Target: %s\n- Version: %s",
+		rl.Method, rl.RequestTarget, rl.HttpVersion)
 }
 
 const crlf = "\r\n"
@@ -49,15 +53,18 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	buf := make([]byte, bufferSize)
 	readToIndex := 0
 	for request.State != requestStateDone {
-		byteReaded, err := reader.Read(buf[readToIndex:])
+		byteRead, err := reader.Read(buf[readToIndex:])
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				request.State = requestStateDone
-				break
+				if request.State != requestStateDone {
+					// still parsing body but stream ended → too short
+					return nil, errors.New("incomplete body")
+				}
+				return request, nil
 			}
 			return nil, err
 		}
-		readToIndex += byteReaded
+		readToIndex += byteRead
 
 		parsedBytes, err := request.parse(buf[:readToIndex])
 		if err != nil {
@@ -114,12 +121,57 @@ func (r *Request) parseSingle(data []byte) (int, error) {
 			return 0, err
 		}
 		if done {
-			r.State = requestStateDone
+			r.State = requestStateParsingBody
 		}
 		return bytesRead, nil
+	case requestStateParsingBody:
+		if r.Headers.Get("Content-Length") == "" {
+			r.State = requestStateDone
+			return 0, nil
+		}
+		r.Body = append(r.Body, data...)
+		err := r.checkBodyProgress()
+		if r.State == requestStateDone {
+			return 0, err
+		}
+
+		if err != nil {
+			return len(data), err
+		}
+		return len(data), nil
 	default:
 		return 0, fmt.Errorf("invalid request state: %d", r.State)
 	}
+}
+
+func (r *Request) checkBodyProgress() error {
+	contentLength, ok, err := r.contentLength()
+	if err != nil {
+		return err
+	}
+	if !ok {
+		r.State = requestStateDone
+		return nil
+	}
+	if len(r.Body) > contentLength {
+		return errors.New("body too large")
+	}
+	if len(r.Body) == contentLength {
+		r.State = requestStateDone
+	}
+	return nil
+}
+
+func (r Request) contentLength() (int, bool, error) {
+	contentLengthHeader := r.Headers.Get("Content-Length")
+	if contentLengthHeader == "" || contentLengthHeader == "0" {
+		return 0, false, nil
+	}
+	contentLength, err := strconv.Atoi(contentLengthHeader)
+	if err != nil {
+		return 0, false, err
+	}
+	return contentLength, true, nil
 }
 
 func parseRequestLine(input []byte) (int, *RequestLine, error) {

@@ -26,6 +26,10 @@ func NewHeaders() Headers {
 	return make(Headers)
 }
 
+func (h Headers) Get(key string) string {
+	return h[strings.ToLower(key)]
+}
+
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	crlfPosition := bytes.Index(data, []byte(crlf))
 	if crlfPosition == -1 {
