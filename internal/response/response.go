@@ -107,6 +107,17 @@ func (w *Writer) WriteHeaders(headers headers.Headers) error {
 	return errors.New("wrong order of writing")
 
 }
+
+func (w *Writer) WriteTrailers(h headers.Headers) error {
+	if w.WriterStatus == headersLineWritten {
+		w.writer.Write([]byte(fmt.Sprintf("%x\r\n", 0)))
+		WriteHeaders(w.writer, h)
+		w.writer.Write([]byte("\r\n"))
+		w.WriterStatus = bodyWritten
+	}
+	return nil
+}
+
 func (w *Writer) WriteBody(p []byte) (int, error) {
 	if w.WriterStatus == headersLineWritten {
 		n, err := w.writer.Write(p)

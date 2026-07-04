@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -9,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 
+	headers2 "github.com/roman-hushpit/learn-http-protocol/internal/headers"
 	"github.com/roman-hushpit/learn-http-protocol/internal/request"
 	"github.com/roman-hushpit/learn-http-protocol/internal/response"
 	"github.com/roman-hushpit/learn-http-protocol/internal/server"
@@ -49,12 +52,15 @@ func main() {
 			headers.Set("Content-Type", "text/html")
 			headers.Drop("Content-Length")
 			headers.Set("Transfer-Encoding", "chunked")
+			headers.Set("Trailer", "X-Content-SHA256, X-Content-Length")
 			w.WriteHeaders(headers)
 
 			buf := make([]byte, 1024)
+			totalBody := make([]byte, 0, 1024)
 			for {
 				read, err := binResponse.Body.Read(buf)
 				if read > 0 {
+					totalBody = append(totalBody, buf[:read]...)
 					w.WriteChunkedBody(buf[:read])
 				}
 				if err != nil {
@@ -64,7 +70,16 @@ func main() {
 					break
 				}
 			}
-			w.WriteChunkedBodyDone()
+			if headers["Trailer"] != "" {
+				newHeaders := headers2.NewHeaders()
+				sum256 := sha256.Sum256(totalBody)
+				newHeaders.Set("X-Content-SHA256", fmt.Sprintf("%x", sum256))
+				newHeaders.Set("X-Content-Length", fmt.Sprintf("%d", len(totalBody)))
+				w.WriteTrailers(newHeaders)
+			} else {
+				w.WriteChunkedBodyDone()
+			}
+			return
 		}
 
 		successResponse := "<html>\n  <head>\n    <title>200 OK</title>\n  </head>\n  <body>\n    <h1>Success!</h1>\n    <p>Your request was an absolute banger.</p>\n  </body>\n</html>\n"
